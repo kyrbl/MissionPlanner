@@ -298,6 +298,8 @@ namespace MissionPlanner.Controls
             base.Dispose(disposing);
         }
 
+        private float _targetAngle = 0;
+        private float _targetRssi = 0;
         private float _roll = 0;
         private float _navroll = 0;
         private float _pitch = 0;
@@ -339,6 +341,32 @@ namespace MissionPlanner.Controls
         float _greenSSAp = 10;
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public float targetAngle
+        {
+            get { return _targetAngle; }
+            set
+            {
+                if (_targetAngle != value)
+                {
+                    _targetAngle = value;
+                    this.Invalidate();
+                }
+            }
+        }
+
+        public float targetRssi
+        {
+            get { return _targetRssi; }
+            set
+            {
+                if (_targetRssi != value)
+                {
+                    _targetRssi = value;
+                    this.Invalidate();
+                }
+            }
+        }
+
         public float roll
         {
             get { return _roll; }
@@ -1230,6 +1258,98 @@ namespace MissionPlanner.Controls
             }
         }
 
+        private void DrawCrossMark(Graphics g, int X, int size, Color color)
+        {
+            int hudCenterY = (int)this.Height / 2;
+            using (Pen pen = new Pen(color, 2))
+            {
+                // Hardcoded Y values due to cross being static on this axis
+                g.DrawLine(pen, X - size / 2, hudCenterY, X + size / 2, hudCenterY);
+                g.DrawLine(pen, X, hudCenterY - size / 2, X, hudCenterY + size / 2);
+            }
+        }
+
+        private void DrawRSSI(Graphics g, double rssi, int X, Color color)
+        {
+            int hudCenterY = (int)this.Height / 2;
+            string rssiText = $"RSSI: {rssi}";
+            using (Font font = new Font("Arial", 10, FontStyle.Bold))
+            using (SolidBrush brush = new SolidBrush(color))
+            {
+                // Hardcoded Y values due to cross being static on this axis
+                g.DrawString(rssiText, font, brush, new Point(X, hudCenterY + 10));
+            }
+        }
+
+        private int CalculateCrossPosition(
+            double targetYaw, int hudWidth, int hudHeight)
+        {
+            double pixelsPerDegreeX = hudWidth / 120.0; // PLAY WITH THIS VALUE
+            double xPosition = hudWidth / 2 + targetYaw * pixelsPerDegreeX;
+
+            xPosition = Math.Max(0, Math.Min(hudWidth, xPosition));
+
+            return (int)xPosition;
+        }
+
+        private double Spline(double x)
+        {
+            double[] X = { -6.7, -5.7, -5.5, -3.8, -3.6, -2.7, -0.7, 7.5, 13.4, 23.8, 26.5, 27.5, 28 };
+
+            double[,] coefficients = {
+                { -184.567269, 547.714659, -383.14739, -20 },
+                { -184.567269, -5.98714869, 158.580121, -40 },
+                { 18.2127587, -116.72751, 134.037189, -10 },
+                { 242.505397, -23.8424407, -104.931728, -30 },
+                { -43.5034228, 121.660797, -85.3680564, -50 },
+                { -1.57779341, 4.20155597, 27.9080617, -60 },
+                { 0.276820709, -5.2652045, 25.7807646, 0 },
+                { -0.0772714784, 1.54458494, -4.72831575, 10 },
+                { -0.0316357426, 0.176879776, 5.4283261, 20 },
+                { -0.0491829645, -0.810155394, -1.15774033, 60 },
+                { -2.1832517, -1.20853741, -6.60821089, 50 },
+                { -2.1832517, -7.75829252, -15.5750408, 40 }
+            };
+
+            // Find the interval that x belongs to
+            for (int i = 0; i < X.Length - 1; i++)
+            {
+                if (X[i] <= x && x < X[i + 1])
+                {
+                    // Get coefficients for the current interval
+                    double a = coefficients[i, 0];
+                    double b = coefficients[i, 1];
+                    double c = coefficients[i, 2];
+                    double d = coefficients[i, 3];
+
+                    // Compute the cubic spline for this interval
+                    return a * Math.Pow(x - X[i], 3) + b * Math.Pow(x - X[i], 2) + c * (x - X[i]) + d;
+                }
+            }
+
+            // If x is exactly X[-1], return the last value
+            return coefficients[coefficients.GetLength(0) - 1, 0];
+        }
+
+        private void drawCustomElements(PaintEventArgs e)
+        {
+            double targetYaw = Spline(_targetAngle); // approximate yaw from msg using spline to get grads
+            double targetRssi = _targetRssi; // target rssi
+
+            // Logging the values for debugging
+            log.Info($"Target Yaw: {targetYaw}");
+            log.Info($"Target RSSI: {targetRssi}");
+
+            // Get HUD dimensions
+            int hudWidth = this.Width;
+            int hudHeight = this.Height;
+
+            int crossXPosition = CalculateCrossPosition(targetYaw, hudWidth, hudHeight);
+            DrawCrossMark(e.Graphics, crossXPosition, 20, Color.DarkRed);
+
+            DrawRSSI(e.Graphics, targetRssi, crossXPosition, Color.DarkRed);
+        }
+
         bool inOnPaint = false;
         string otherthread = "";
 
@@ -1337,6 +1457,8 @@ namespace MissionPlanner.Controls
                 count = 0;
                 huddrawtime = 0;
             }
+
+            drawCustomElements(e);
 
             lock (this)
             {

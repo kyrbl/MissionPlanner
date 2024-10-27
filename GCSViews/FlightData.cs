@@ -32,6 +32,7 @@ using ZedGraph;
 using LogAnalyzer = MissionPlanner.Utilities.LogAnalyzer;
 using TableLayoutPanelCellPosition = System.Windows.Forms.TableLayoutPanelCellPosition;
 using UnauthorizedAccessException = System.UnauthorizedAccessException;
+using System.Text.RegularExpressions;
 
 // written by michael oborne
 
@@ -1016,6 +1017,18 @@ namespace MissionPlanner.GCSViews
             {
                 var isitarmed = MainV2.comPort.MAV.cs.armed;
                 var action = MainV2.comPort.MAV.cs.armed ? "Disarm" : "Arm";
+
+                //Start monitoring drone target direction after arming
+                if (isitarmed)
+                {
+                    log.Info("Stopped monitoring logs for directions");
+                    DirectionMessageTimer.Stop();
+                }
+                else
+                {
+                    log.Info("Started monitoring logs for directions");
+                    DirectionMessageTimer.Start();
+                }
 
                 if (isitarmed)
                     if (CustomMessageBox.Show("Are you sure you want to " + action, action,
@@ -4252,6 +4265,58 @@ namespace MissionPlanner.GCSViews
             });
         }
 
+        private static (float xAng, float rssi)? ParseLogMessage(string logMessage)
+        {
+            // Define the regex pattern
+            string pattern = @"191\s*:\s*x_ang:\s*(-?\d+\.\d+),\s*y_ang:\s*(-?\d+\.\d+),\s*RSSI:\s*(-?\d+)";
+
+            // Create a Regex object
+            Regex regex = new Regex(pattern);
+
+            // Try to match the pattern in the logMessage
+            Match match = regex.Match(logMessage);
+
+            // If match is successful, extract the values
+            if (match.Success)
+            {
+                float xAng = float.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                float rssi = float.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+                return (xAng, rssi);
+            }
+
+            // Return null if no match is found
+            return null;
+        }
+
+        private void DirectionMessageTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                log.Info("Hello from a loop that monitors");
+
+                (float xAng, float rssi)? parsingResult = null;
+
+                //prod solution
+                MainV2.comPort.MAV.cs.messages.ForEach(x =>
+                {
+                    parsingResult = ParseLogMessage(x.Item2);
+                });
+
+                if (parsingResult.HasValue)
+                {
+                    hud1.targetAngle = parsingResult.Value.xAng;
+                    hud1.targetRssi = parsingResult.Value.rssi;
+                    log.Info($"Found proper log message. " +
+                        $"Yaw from MSG: {parsingResult.Value.xAng}; " +
+                        $"RSSI from MSG: {parsingResult.Value.rssi}");
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
+        }
+
         private void Messagetabtimer_Tick(object sender, EventArgs e)
         {
             var messagetime = MainV2.comPort.MAV.cs.messages.LastOrDefault().time;
@@ -4988,7 +5053,7 @@ namespace MissionPlanner.GCSViews
             {
                 try
                 {
-                    MainV2.cam = new Capture(Settings.Instance.GetInt32("video_device"), new AMMediaType());
+                    MainV2.cam = new WebCamService.Capture(Settings.Instance.GetInt32("video_device"), new AMMediaType());
 
                     MainV2.cam.Start();
 

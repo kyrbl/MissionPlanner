@@ -233,6 +233,7 @@ namespace MissionPlanner.GCSViews
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.openScriptDialog = new System.Windows.Forms.OpenFileDialog();
             this.scriptChecker = new System.Windows.Forms.Timer(this.components);
+            this.DirectionMessageTimer = new System.Windows.Forms.Timer(this.components);
             this.Messagetabtimer = new System.Windows.Forms.Timer(this.components);
             this.bindingSourceStatusTab = new System.Windows.Forms.BindingSource(this.components);
             this.jumpToTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -2801,6 +2802,11 @@ namespace MissionPlanner.GCSViews
             // 
             this.scriptChecker.Tick += new System.EventHandler(this.scriptChecker_Tick);
             // 
+            // DirectionMessageTimer
+            // 
+            this.DirectionMessageTimer.Interval = 200;
+            this.DirectionMessageTimer.Tick += new System.EventHandler(this.DirectionMessageTimer_Tick);
+            // 
             // Messagetabtimer
             // 
             this.Messagetabtimer.Interval = 200;
@@ -3022,6 +3028,7 @@ namespace MissionPlanner.GCSViews
         private Controls.MyButton BUT_DFMavlink;
         public System.Windows.Forms.TabPage tabPagemessages;
         private System.Windows.Forms.TextBox txt_messagebox;
+        private System.Windows.Forms.Timer DirectionMessageTimer;
         private System.Windows.Forms.Timer Messagetabtimer;
         public System.Windows.Forms.TabPage tabActionsSimple;
         private Controls.MyButton myButton1;
